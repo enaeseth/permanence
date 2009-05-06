@@ -1,0 +1,273 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+from __future__ import with_statement
+import yaml
+import subprocess
+import time
+import threading
+import signal
+import logging
+import re
+import sys
+import os
+
+def load_config(filename):
+    with open(filename, 'rt') as config_file:
+        return yaml.load(config_file)
+        
+class ConfigurationError(RuntimeError):
+    pass
+
+def process_config(config):
+    if not 'sources' in config:
+        raise ConfigurationError("no sources defined in config")
+    
+    for name, source in config['sources'].iteritems():
+        if not 'stream' in source:
+            raise ConfigurationError("source %s defines no stream" % name)
+        if not 'storage' in source:
+            raise ConfigurationError("source %s defines no storage dir" % name)
+    
+    for name, show in config['shows'].items():
+        show['name'] = name
+        
+        if show['end'] < show['start']:
+            # show ends on following day; add 24 hours to end time
+            show['end'] += (60 * 60 * 24)
+    
+    return config
+
+class Session(object):
+    """
+    A recording session using StreamRipper.
+    """
+    
+    def __init__(self, stream, output_file, executable='streamripper'):
+        self.stream = stream
+        self.output_file = output_file
+        self.executable = executable
+    
+    def start(self):
+        args = [self.executable, self.stream, '-A', '-a', self.output_file]
+        black_hole = os.devnull or '/dev/null'
+        self.stdin = open(black_hole, 'r')
+        self.stdout = open(black_hole, 'w')
+        self.process = subprocess.Popen(args, stdin=self.stdin,
+            stdout=self.stdout, stderr=subprocess.STDOUT)
+        time.sleep(2)
+        
+        status = self.process.poll()
+        if status is not None:
+            raise RuntimeError("%s exited (already) with status %d" %
+                (executable, status))
+        
+    def stop(self):
+        os.kill(self.process.pid, signal.SIGTERM)
+        result = self.process.wait()
+        
+        try:
+            self.stdin.close()
+            self.stdout.close()
+        except Exception:
+            pass
+        
+        return result
+
+class Controller(object):
+    def __init__(self, config_filename):
+        self.config_filename = config_filename
+        self.config_lock = threading.Lock()
+        self.processes = {}
+        self.stopping = False
+        self.logger = logging.getLogger()
+        
+        self.load_config()
+    
+    def load_config(self):
+        with self.config_lock:
+            self.config = process_config(load_config(self.config_filename))
+    
+    @classmethod
+    def get_start_of_day(cls):
+        date = time.strftime('%Y-%m-%d')
+        return time.mktime(time.strptime(date, '%Y-%m-%d'))
+    
+    @classmethod
+    def translate_show_name(cls, show_name):
+        return re.sub(r'\W+', '', re.sub(r'\s+', '_', show_name))
+        
+    @classmethod
+    def get_recording_filename(cls, source, show):
+        folder = (show.get('folder') or cls.translate_show_name(show['name']))
+        filename = time.strftime('%Y-%m-%d.mp3')
+        return os.path.join(source['storage'], folder, filename)
+        
+    def start_session(self, key, show):
+        # Time to start!
+        self.logger.info('Starting to record "%s"' % key)
+        
+        source = self.config['sources'][show['source']]
+        
+        outfile = self.get_recording_filename(source, show)
+        session = Session(source['stream'], outfile)
+        
+        try:
+            session.start()
+            stop_time = self.get_start_of_day() + show['end']
+            self.processes[key] = (session, stop_time)
+        except RuntimeError, e:
+            self.logger.error('Failed to record "%s": %s' % (key, e))
+        
+    def stop_session(self, show_key, session):
+        self.logger.info('Done recording "%s"' % show_key)
+        result = session.stop()
+        if result != 0:
+            self.logger.warn('Recording session "%s" exited with status %s' %
+                (show_key, result))
+        del self.processes[show_key]
+        
+    @classmethod
+    def should_record(cls, show, leeway):
+        weekday = time.strftime('%A')
+        if weekday not in show['weekdays']:
+            return False
+        
+        day_base = cls.get_start_of_day()
+        now = time.time()
+        if day_base + show['start'] - leeway > now:
+            # start time is in the future
+            return False
+        
+        if day_base + show['end'] + leeway < now:
+            # end time is in the past
+            return False
+        
+        return True
+    
+    def run(self):
+        while not self.stopping:
+            # self.logger.debug("Tick")
+            leeway = self.config['options']['leeway']
+            
+            # Stop recording sessions that are now over.
+            for show_key, (session, stop_time) in self.processes.items():
+                if self.stopping or stop_time + leeway <= time.time():
+                    self.stop_session(show_key, session)
+            
+            # Start new recording sessions.
+            with self.config_lock:
+                for name, show in self.config['shows'].iteritems():
+                    key = "%s/%s" % (show['source'], name)
+                
+                    if key in self.processes:
+                        # Already recording this show.
+                        continue
+                
+                    if self.should_record(show, leeway):
+                        self.start_session(key, show)
+                
+            # Wait one second before checking again.
+            time.sleep(1)
+    
+    def stop(self):
+        self.stopping = True
+        self.logger.info("Shutting down.")
+    
+def daemonize():
+    # http://code.activestate.com/recipes/278731/
+    # http://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # exit first parent
+            os._exit(0)
+    except OSError, e:
+        print >>sys.stderr, "first fork failed: %s (%d)" % (e.strerror,
+            e.errno)
+        sys.exit(1)
+    
+    # decouple from the parent environment
+    os.chdir('/')
+    os.setsid()
+    os.umask(0)
+    
+    try:
+       pid = os.fork()
+       if pid > 0:
+           # exit first parent
+           os._exit(0)
+    except OSError, e:
+        print >>sys.stderr, "second fork failed: %s (%d)" % (e.strerror,
+            e.errno)
+        sys.exit(1)
+    
+    return os.getpid()
+
+if __name__ == '__main__':
+    from optparse import OptionParser
+    import logging.handlers
+    
+    parser = OptionParser(usage='%prog [options]')
+    parser.add_option('-c', '--configuration', dest='config_file',
+        metavar='FILENAME', help='configuration file')
+    parser.add_option('-f', '--foreground', dest='foreground',
+        action='store_true', help='run in foreground')
+    parser.add_option('-l', '--log-dir', dest='log_dir',
+        metavar='DIRECTORY', help='logging directory')
+    parser.add_option('-p', '--pid-file', dest='pid_file',
+        metavar='FILENAME', help='location to which the process ID will be '
+        'written')
+    
+    base = os.path.dirname(os.path.abspath(sys.argv[0]))
+    
+    parser.set_defaults(foreground=False,
+        config_file=os.path.join(base, 'etc', 'permanence.yaml'),
+        log_dir=os.path.join('var', 'log', 'permanence'),
+        pid_file=os.path.join('var', 'run', 'permanence.pid'))
+    options, args = parser.parse_args()
+    
+    logger = logging.getLogger()
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s",
+        "%Y-%m-%d %H:%M:%S")
+    
+    if options.foreground:
+        handler = logging.StreamHandler()
+        logger.setLevel(logging.DEBUG)
+    else:
+        log_file = os.path.join(options.log_dir, 'permanence.log')
+        handler = logging.handlers.TimedRotatingFileHandler(log_file,
+            'W0', 1, 10, 'UTF-8')
+        logger.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
+    controller = Controller(options.config_file)
+    
+    def shutdown(signum, frame):
+        if options.foreground:
+            print
+        else:
+            os.remove(options.pid_file)
+        controller.stop()
+        
+    def update(signum, frame):
+        try:
+            controller.load_config()
+        except ConfigurationError, e:
+            logger.error("config reload failed: %s", e)
+    
+    if options.foreground:
+        signal.signal(signal.SIGINT, shutdown)
+    else:
+        signal.signal(signal.SIGHUP, update)
+    signal.signal(signal.SIGTERM, shutdown)
+    
+    if not options.foreground:
+        daemon_pid = daemonize()
+        with open(options.pid_file, 'wt') as pid_file:
+            print >>pid_file, daemon_pid
+        logger.info("Forked; daemon running as process %d." % daemon_pid)
+        
+    logger.info("Starting up.")
+    controller.run()
