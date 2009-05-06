@@ -95,7 +95,7 @@ class Controller(object):
     
     @classmethod
     def translate_show_name(cls, show_name):
-        return re.sub(r'\W+', '', re.sub(r'\s+', '_', show_name))
+        return re.sub(r'\W+', '', re.sub(r'\s+', '_', show_name)).lower()
         
     @classmethod
     def get_recording_filename(cls, source, show):
