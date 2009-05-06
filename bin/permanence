@@ -253,9 +253,10 @@ if __name__ == '__main__':
         
     def update(signum, frame):
         try:
+            logger.info("Reloading configuration.")
             controller.load_config()
         except ConfigurationError, e:
-            logger.error("config reload failed: %s", e)
+            logger.error("Configuration reload failed: %s", e)
     
     if options.foreground:
         signal.signal(signal.SIGINT, shutdown)
