@@ -241,12 +241,12 @@ if __name__ == '__main__':
         metavar='FILENAME', help='location to which the process ID will be '
         'written')
     
-    base = os.path.dirname(os.path.abspath(sys.argv[0]))
+    base = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))
     
     parser.set_defaults(foreground=False,
         config_file=os.path.join(base, 'etc', 'permanence.yaml'),
-        log_dir=os.path.join('var', 'log', 'permanence'),
-        pid_file=os.path.join('var', 'run', 'permanence.pid'))
+        log_dir=os.path.join(base, 'log'),
+        pid_file=os.path.join(base, 'run', 'permanence.pid'))
     options, args = parser.parse_args()
     
     logger = logging.getLogger()
