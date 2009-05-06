@@ -20,8 +20,13 @@ class ConfigurationError(RuntimeError):
     pass
 
 def process_config(config):
+    logger = logging.getLogger()
+    
     if not 'sources' in config:
         raise ConfigurationError("no sources defined in config")
+    
+    if 'options' not in config or 'leeway' not in config['options']:
+        raise ConfigurationError("leeway time not defined in config")
     
     for name, source in config['sources'].iteritems():
         if not 'stream' in source:
@@ -30,7 +35,23 @@ def process_config(config):
             raise ConfigurationError("source %s defines no storage dir" % name)
     
     for name, show in config['shows'].items():
-        show['name'] = name
+        if not 'source' in show:
+            logger.warn('Ignoring show "%s": no source defined.', name)
+            continue
+        elif show['source'] not in config['source']:
+            logger.warn('Ignoring show "%s": unknown source "%s".', name,
+                show['source'])
+            continue
+        
+        for field in ('weekdays', 'start', 'end'):
+            if not field in show:
+                logger.warn('Ignoring show "%s": %s not defined', name)
+                continue
+        if not isinstance(weekdays, list):
+            logger.warn('Ignoring show "%s": weekdays is not a list', name)
+            continue
+        
+        show['name'] = name # make the name available in the dictionary
         
         if show['end'] < show['start']:
             # show ends on following day; add 24 hours to end time
