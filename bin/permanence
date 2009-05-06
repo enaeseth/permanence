@@ -40,7 +40,7 @@ def process_config(config):
         if not 'source' in show:
             logger.warn('Ignoring show "%s": no source defined.', name)
             continue
-        elif show['source'] not in config['source']:
+        elif show['source'] not in config['sources']:
             logger.warn('Ignoring show "%s": unknown source "%s".', name,
                 show['source'])
             continue
