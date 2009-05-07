@@ -329,7 +329,10 @@ if __name__ == '__main__':
         if options.foreground:
             print
         else:
-            os.remove(options.pid_file)
+            try:
+                os.remove(options.pid_file)
+            except OSError:
+                pass # no worries
         controller.stop()
         
     def update(signum, frame):
@@ -345,11 +348,14 @@ if __name__ == '__main__':
         signal.signal(signal.SIGHUP, update)
     signal.signal(signal.SIGTERM, shutdown)
     
+    logger.info("Started up.")
     if not options.foreground:
+        if os.path.exists(options.pid_file):
+            logger.warn("PID file %s already exists!", options.pid_file)
         daemon_pid = daemonize()
         with open(options.pid_file, 'wt') as pid_file:
             print >>pid_file, daemon_pid
-        logger.info("Forked; daemon running as process %d." % daemon_pid)
+        logger.info("Forked; daemon running as process %d.", daemon_pid)
         
-    logger.info("Starting up.")
+    logger.info("Starting session controller.")
     controller.run()
