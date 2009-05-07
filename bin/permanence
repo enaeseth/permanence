@@ -11,6 +11,10 @@ import logging
 import re
 import sys
 import os
+import smtplib
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEText import MIMEText
+from contextlib import closing
 
 def load_config(filename):
     with open(filename, 'rt') as config_file:
@@ -60,6 +64,51 @@ def process_config(config):
             show['end'] += (60 * 60 * 24)
     
     return config
+
+def send_notice(config, source, show):
+    """
+    Sends a new-recording notice. `config` should be the mail section of the
+    Permanence configuration, `show` should be the show that was just
+    recorded, and `source` should be the show's source.
+    """
+    
+    if 'notify' not in show or not show['notify']:
+        return
+
+    logger = logging.getLogger()
+    try:
+        filename = Controller.get_recording_filename(source, show)
+        if filename.startswith(source['storage']):
+            filename = filename[len(source['storage']):]
+        info = {
+            'name': show['name'],
+            'url': "%s%s" % (source['base_url'], filename)
+        }
+    
+        sender = config.get('from') or config['username']
+        recipients = ', '.join(show['notify'])
+        msg = MIMEMultipart()
+        msg['From'] = sender
+        msg['To'] = recipients
+        msg['Subject'] = (config.get('subject') or 'New Recording') % info
+        body = (config.get('body') or "Recording URL: %(url)s") % info
+        msg.attach(MIMEText(body))
+    
+        
+        with closing(smtplib.SMTP(config['server'], config['port'])) as con:
+            con.ehlo()
+            if config.get('security') == 'starttls':
+                con.starttls()
+                con.ehlo()
+            con.login(config['username'], config['password'])
+            con.sendmail(sender, show['notify'], msg.as_string())
+        
+        logger.info('Sent notice of "%s/%s" to %s.', show['source'],
+            show['name'], recipients)
+    except Exception, e:
+        # high availability
+        logger.warn('Failed to send notice of "%s/%s": (%s) %s', show['source'],
+            show['name'], type(e).__name__, e)
 
 class Session(object):
     """
@@ -138,7 +187,7 @@ class Controller(object):
         try:
             session.start()
             stop_time = self.get_start_of_day() + show['end']
-            self.processes[key] = (session, stop_time)
+            self.processes[key] = (session, source, show, stop_time)
         except RuntimeError, e:
             self.logger.error('Failed to record "%s": %s' % (key, e))
         
@@ -148,7 +197,15 @@ class Controller(object):
         if result != 0:
             self.logger.warn('Recording session "%s" exited with error '
                 'status %s.' % (show_key, result))
+        
+        session, source, show, stop_time = self.processes[show_key]
         del self.processes[show_key]
+        
+        if 'mail' in self.config:
+            with self.config_lock:
+                mail_config = self.config['mail'].copy()
+            
+            send_notice(mail_config, source, show)
         
     @classmethod
     def should_record(cls, show, leeway):
@@ -173,7 +230,8 @@ class Controller(object):
             leeway = self.config['options']['leeway']
             
             # Stop recording sessions that are now over.
-            for show_key, (session, stop_time) in self.processes.items():
+            for show_key, info in self.processes.items():
+                session, source, show, stop_time = info
                 if self.stopping or stop_time + leeway <= time.time():
                     self.stop_session(show_key, session)
             
