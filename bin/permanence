@@ -118,13 +118,14 @@ class Session(object):
     def __init__(self, stream, output_file, executable='streamripper'):
         self.stream = stream
         self.output_file = output_file
+        self.log_file = os.path.splitext(output_file)[0] + '.log'
         self.executable = executable
     
     def start(self):
         args = [self.executable, self.stream, '-A', '-a', self.output_file]
         black_hole = os.devnull or '/dev/null'
         self.stdin = open(black_hole, 'r')
-        self.stdout = open(black_hole, 'w')
+        self.stdout = open(self.log_file, 'at')
         self.process = subprocess.Popen(args, stdin=self.stdin,
             stdout=self.stdout, stderr=subprocess.STDOUT)
         time.sleep(2)
