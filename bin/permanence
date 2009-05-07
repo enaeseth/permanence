@@ -175,7 +175,10 @@ class Controller(object):
     def get_recording_filename(cls, source, show):
         folder = (show.get('folder') or cls.translate_show_name(show['name']))
         filename = time.strftime('%Y-%m-%d.mp3')
-        return os.path.join(source['storage'], folder, filename)
+        directory = os.path.join(source['storage'], folder)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+        return os.path.join(directory, filename)
         
     def start_session(self, key, show):
         # Time to start!
