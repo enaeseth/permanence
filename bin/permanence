@@ -47,7 +47,7 @@ def process_config(config):
         
         for field in ('weekdays', 'start', 'end'):
             if not field in show:
-                logger.warn('Ignoring show "%s": %s not defined', name)
+                logger.warn('Ignoring show "%s": %s not defined', name, field)
                 continue
         if not isinstance(show['weekdays'], list):
             logger.warn('Ignoring show "%s": weekdays is not a list', name)
