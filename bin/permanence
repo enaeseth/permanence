@@ -125,7 +125,8 @@ class Session(object):
         args = [self.executable, self.stream, '-A', '-a', self.output_file]
         black_hole = os.devnull or '/dev/null'
         self.stdin = open(black_hole, 'r')
-        self.stdout = open(self.log_file, 'at')
+        open_mode = 'at' if os.path.exists(self.log_file) else 'wt'
+        self.stdout = open(self.log_file, open_mode)
         self.process = subprocess.Popen(args, stdin=self.stdin,
             stdout=self.stdout, stderr=subprocess.STDOUT)
         time.sleep(2)
