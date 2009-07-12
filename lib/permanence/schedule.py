@@ -12,8 +12,14 @@ from permanence.config import ConfigurationError
 
 _implementations = {}
 def get_schedule(definition):
-    pass
-
+    kind = definition.get('type')
+    if not kind:
+        raise ValueError("no type defined in schedule definition")
+    implementation = _implementations.get(kind)
+    if not implementation:
+        raise LookupError("unknown schedule type %r" % kind)
+    
+    return implementation.from_config(definition)
 
 class WeeklySchedule(object):
     def __init__(self, weekdays, start_time, duration):
@@ -91,3 +97,4 @@ class WeeklySchedule(object):
     def __repr__(self):
         return '%s(%r, %r, %r)' % (type(self).__name__, self.weekdays,
             self.start_time, self.duration)
+_implementations['weekly'] = WeeklySchedule
