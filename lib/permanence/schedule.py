@@ -4,17 +4,12 @@
 Handling of show schedules.
 """
 
-__all__ = ['get_schedule']
-
 import re
 import time
 from permanence.config import ConfigurationError
 
 _implementations = {}
-def get_schedule(definition):
-    kind = definition.get('type')
-    if not kind:
-        raise ValueError("no type defined in schedule definition")
+def get_schedule(kind, definition):
     implementation = _implementations.get(kind)
     if not implementation:
         raise LookupError("unknown schedule type %r" % kind)

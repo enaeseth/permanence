@@ -5,6 +5,7 @@ Configuration loading and verification for Permanence.
 """
 
 from __future__ import with_statement
+from permanence.schedule import get_schedule
 import yaml
 
 class Configuration(object):
