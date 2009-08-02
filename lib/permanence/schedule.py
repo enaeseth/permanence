@@ -31,8 +31,8 @@ class WeeklySchedule(object):
         start = time.mktime(future) + (60 * 60 * 24) * closest
         
         start_time = start + self.start_time
-        return (start_time, start_time + self.duration)
-        
+        return (start_time, self.duration)
+    
     def _get_closest_day_difference(self, today):
         return min((day - today) % 7 for day in self.weekdays)
         
