@@ -2,263 +2,86 @@
 # encoding: utf-8
 
 from __future__ import with_statement
-import yaml
-import subprocess
-import time
-import threading
-import signal
-import logging
-import re
 import sys
 import os
-import smtplib
-from email.MIMEMultipart import MIMEMultipart
-from email.MIMEText import MIMEText
-from contextlib import closing
+import os.path
 
-def load_config(filename):
-    with open(filename, 'rt') as config_file:
-        return yaml.load(config_file)
-        
-class ConfigurationError(RuntimeError):
-    pass
+try:
+    import permanence
+except ImportError:
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))
+    sys.path.append(os.path.join(root_dir, "lib"))
 
-def process_config(config):
-    logger = logging.getLogger()
-    
-    if not 'sources' in config:
-        raise ConfigurationError("No sources are defined in the config file.")
-    
-    if 'options' not in config or 'leeway' not in config['options']:
-        raise ConfigurationError("No leeway time option is defined in the "
-            "config file.")
-    
-    for name, source in config['sources'].iteritems():
-        if not 'stream' in source:
-            raise ConfigurationError("Source %s defines no stream." % name)
-        if not 'storage' in source:
-            raise ConfigurationError("Source %s defines no storage "
-                "directory." % name)
-    
-    for name, show in config['shows'].items():
-        if not 'source' in show:
-            logger.warn('Ignoring show "%s": no source defined.', name)
-            continue
-        elif show['source'] not in config['sources']:
-            logger.warn('Ignoring show "%s": unknown source "%s".', name,
-                show['source'])
-            continue
-        
-        for field in ('weekdays', 'start', 'end'):
-            if not field in show:
-                logger.warn('Ignoring show "%s": %s not defined', name, field)
-                continue
-        if not isinstance(show['weekdays'], list):
-            logger.warn('Ignoring show "%s": weekdays is not a list', name)
-            continue
-        
-        show['name'] = name # make the name available in the dictionary
-        
-        if show['end'] < show['start']:
-            # show ends on following day; add 24 hours to end time
-            show['end'] += (60 * 60 * 24)
-    
-    return config
-
-def send_notice(config, source, show):
-    """
-    Sends a new-recording notice. `config` should be the mail section of the
-    Permanence configuration, `show` should be the show that was just
-    recorded, and `source` should be the show's source.
-    """
-    
-    if 'notify' not in show or not show['notify']:
-        return
-
-    logger = logging.getLogger()
-    try:
-        filename = Controller.get_recording_filename(source, show)
-        if filename.startswith(source['storage']):
-            filename = filename[len(source['storage']):]
-        info = {
-            'name': show['name'],
-            'url': "%s%s" % (source['base_url'], filename)
-        }
-    
-        sender = config.get('from') or config['username']
-        recipients = ', '.join(show['notify'])
-        msg = MIMEMultipart()
-        msg['From'] = sender
-        msg['To'] = recipients
-        msg['Subject'] = (config.get('subject') or 'New Recording') % info
-        body = (config.get('body') or "Recording URL: %(url)s") % info
-        msg.attach(MIMEText(body))
-    
-        
-        with closing(smtplib.SMTP(config['server'], config['port'])) as con:
-            con.ehlo()
-            if config.get('security') == 'starttls':
-                con.starttls()
-                con.ehlo()
-            con.login(config['username'], config['password'])
-            con.sendmail(sender, show['notify'], msg.as_string())
-        
-        logger.info('Sent notice of "%s/%s" to %s.', show['source'],
-            show['name'], recipients)
-    except Exception, e:
-        # high availability
-        logger.warn('Failed to send notice of "%s/%s": (%s) %s', show['source'],
-            show['name'], type(e).__name__, e)
-
-class Session(object):
-    """
-    A recording session using StreamRipper.
-    """
-    
-    def __init__(self, stream, output_file, executable='streamripper'):
-        self.stream = stream
-        self.output_file = output_file
-        self.log_file = os.path.splitext(output_file)[0] + '.log'
-        self.executable = executable
-    
-    def start(self):
-        args = [self.executable, self.stream, '-A', '-a', self.output_file]
-        black_hole = os.devnull or '/dev/null'
-        self.stdin = open(black_hole, 'r')
-        open_mode = 'at' if os.path.exists(self.log_file) else 'wt'
-        self.stdout = open(self.log_file, open_mode)
-        self.process = subprocess.Popen(args, stdin=self.stdin,
-            stdout=self.stdout, stderr=subprocess.STDOUT)
-        time.sleep(2)
-        
-        status = self.process.poll()
-        if status is not None:
-            raise RuntimeError("%s exited (already) with status %d" %
-                (executable, status))
-        
-    def stop(self):
-        os.kill(self.process.pid, signal.SIGTERM)
-        result = self.process.wait()
-        
-        try:
-            self.stdin.close()
-            self.stdout.close()
-        except Exception:
-            pass
-        
-        return result
+from permanence.run import Recorder
+from permanence.config import load_config, ConfigurationError
+import logging
+import signal
+import threading
+import traceback
+import time
 
 class Controller(object):
-    def __init__(self, config_filename):
+    __slots__ = ("config_filename", "logger", "recorder")
+    
+    def __init__(self, config_filename, logger):
         self.config_filename = config_filename
-        self.config_lock = threading.Lock()
-        self.processes = {}
-        self.stopping = False
-        self.logger = logging.getLogger()
-        
-        self.load_config()
-    
-    def load_config(self):
-        with self.config_lock:
-            self.config = process_config(load_config(self.config_filename))
-    
-    @classmethod
-    def get_start_of_day(cls):
-        date = time.strftime('%Y-%m-%d')
-        return time.mktime(time.strptime(date, '%Y-%m-%d'))
-    
-    @classmethod
-    def translate_show_name(cls, show_name):
-        return re.sub(r'\W+', '', re.sub(r'\s+', '_', show_name)).lower()
-        
-    @classmethod
-    def get_recording_filename(cls, source, show):
-        folder = (show.get('folder') or cls.translate_show_name(show['name']))
-        filename = time.strftime('%Y-%m-%d.mp3')
-        directory = os.path.join(source['storage'], folder)
-        if not os.path.exists(directory):
-            os.mkdir(directory)
-        return os.path.join(directory, filename)
-        
-    def start_session(self, key, show):
-        # Time to start!
-        self.logger.info('Starting to record show "%s".' % key)
-        
-        source = self.config['sources'][show['source']]
-        
-        outfile = self.get_recording_filename(source, show)
-        session = Session(source['stream'], outfile)
-        
-        try:
-            session.start()
-            stop_time = self.get_start_of_day() + show['end']
-            self.processes[key] = (session, source, show, stop_time)
-        except RuntimeError, e:
-            self.logger.error('Failed to record "%s": %s' % (key, e))
-        
-    def stop_session(self, show_key, session):
-        self.logger.info('Done recording "%s".' % show_key)
-        result = session.stop()
-        if result != 0:
-            self.logger.warn('Recording session "%s" exited with error '
-                'status %s.' % (show_key, result))
-        
-        session, source, show, stop_time = self.processes[show_key]
-        del self.processes[show_key]
-        
-        if 'mail' in self.config:
-            with self.config_lock:
-                mail_config = self.config['mail'].copy()
-            
-            send_notice(mail_config, source, show)
-        
-    @classmethod
-    def should_record(cls, show, leeway):
-        weekday = time.strftime('%A')
-        if weekday not in show['weekdays']:
-            return False
-        
-        day_base = cls.get_start_of_day()
-        now = time.time()
-        if day_base + show['start'] - leeway > now:
-            # start time is in the future
-            return False
-        
-        if day_base + show['end'] + leeway < now:
-            # end time is in the past
-            return False
-        
-        return True
+        self.logger = logger
+        self.recorder = None
     
     def run(self):
-        while not self.stopping:
-            leeway = self.config['options']['leeway']
-            
-            # Stop recording sessions that are now over.
-            for show_key, info in self.processes.items():
-                session, source, show, stop_time = info
-                if self.stopping or stop_time + leeway <= time.time():
-                    self.stop_session(show_key, session)
-            
-            # Start new recording sessions.
-            with self.config_lock:
-                for name, show in self.config['shows'].iteritems():
-                    key = "%s/%s" % (show['source'], name)
-                
-                    if key in self.processes:
-                        # Already recording this show.
-                        continue
-                
-                    if self.should_record(show, leeway):
-                        self.start_session(key, show)
-                
-            # Wait one second before checking again.
-            time.sleep(1)
+        try:
+            logger.debug("Loading configuration from %r." %
+                self.config_filename)
+            config = load_config(self.config_filename)
+            self.recorder = Recorder(config)
+            self._observe_events()
+            self.recorder.start()
+        except ConfigurationError, e:
+            self.logger.error("Failed to load configuration: %s" % e)
     
-    def stop(self):
-        self.stopping = True
-        self.logger.info("Shutting down.")
+    def reload_config(self):
+        logger.debug("Reloading configuration.")
+        try:
+            config = load_config(self.config_filename)
+            self.recorder.apply_configuration(config)
+            self.logger.info("Reloaded configuration.")
+        except Exception, e:
+            self.logger.error("Failed to reload configuration: %s" % e)
     
+    def shutdown(self):
+        logger.info("Shutting down.")
+        self.recorder.stop()
+    
+    def _observe_events(self):
+        events = ("startup", "shutdown", "show_start", "show_done",
+            "show_error", "show_schedule")
+        
+        for event in events:
+            self.recorder.observe(event, getattr(self, "_%s" % event))
+    
+    def _startup(self):
+        logger.info("Recorder has started running.")
+    
+    def _shutdown(self):
+        logger.info("Recorder has shut down.")
+    
+    def _show_start(self, source, show):
+        logger.info("Starting to record %s on %s." % (show.name, source.name))
+    
+    def _show_done(self, source, show, filename):
+        logger.info("Finished recording %s on %s." % (show.name, source.name))
+        logger.debug("Temporarily saved %s to %s." % (show.name, filename))
+    
+    def _show_error(self, source, show, error):
+        logger.warning("Error recording %s on %s: %s" % (show.name,
+            source.name, error))
+    
+    def _show_schedule(self, source, show, start_time):
+        start_time = time.strftime("%a %Y-%m-%d %H:%M:%S",
+            time.localtime(start_time))
+        logger.debug("%s on %s next scheduled to be recorded at %s." %
+            (show.name, source.name, start_time))
+
 def daemonize():
     # http://code.activestate.com/recipes/278731/
     # http://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon_in_python
@@ -327,24 +150,22 @@ if __name__ == '__main__':
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     
-    controller = Controller(options.config_file)
+    controller = Controller(options.config_file, logger)
     
     def shutdown(signum, frame):
         if options.foreground:
-            print
-        else:
+            print # move carat past the "^C"
+        logger.debug("Caught signal %d." % signum)
+        
+        if not options.foreground:
             try:
                 os.remove(options.pid_file)
             except OSError:
                 pass # no worries
-        controller.stop()
-        
+        controller.shutdown()
+    
     def update(signum, frame):
-        try:
-            logger.info("Reloading configuration.")
-            controller.load_config()
-        except ConfigurationError, e:
-            logger.error("Configuration reload failed: %s", e)
+        controller.reload_config()
     
     if options.foreground:
         signal.signal(signal.SIGINT, shutdown)
@@ -352,7 +173,8 @@ if __name__ == '__main__':
         signal.signal(signal.SIGHUP, update)
     signal.signal(signal.SIGTERM, shutdown)
     
-    logger.info("Started up.")
+    logger.info("Starting up.")
+    logger.debug("Process ID is %d" % os.getpid())
     if not options.foreground:
         if os.path.exists(options.pid_file):
             logger.warn("PID file %s already exists!", options.pid_file)
@@ -360,6 +182,10 @@ if __name__ == '__main__':
         with open(options.pid_file, 'wt') as pid_file:
             print >>pid_file, daemon_pid
         logger.info("Forked; daemon running as process %d.", daemon_pid)
-        
-    logger.info("Starting session controller.")
-    controller.run()
+    
+    try:
+        controller.run()
+    except Exception:
+        traceback.print_exc()
+        sys.exit(-1)
+    
