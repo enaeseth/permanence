@@ -18,7 +18,7 @@ def get_schedule(kind, definition):
 
 class WeeklySchedule(object):
     def __init__(self, weekdays, start_time, duration):
-        self.weekdays = weekdays
+        self.weekdays = tuple(weekdays)
         self.start_time = start_time
         self.duration = duration
     
@@ -92,4 +92,14 @@ class WeeklySchedule(object):
     def __repr__(self):
         return '%s(%r, %r, %r)' % (type(self).__name__, self.weekdays,
             self.start_time, self.duration)
+    
+    def __eq__(self, other):
+        return (isinstance(other, WeeklySchedule) and
+            other.weekdays == self.weekdays and
+            other.start_time == self.start_time and
+            other.duration == self.duration)
+    
+    def __hash__(self):
+        return hash(("WeeklySchedule", self.weekdays, self.start_time,
+            self.duration))
 _implementations['weekly'] = WeeklySchedule
