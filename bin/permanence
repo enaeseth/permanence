@@ -54,7 +54,7 @@ class Controller(object):
     
     def _observe_events(self):
         events = ("startup", "shutdown", "show_start", "show_done",
-            "show_error", "show_schedule")
+            "show_error", "show_schedule", "show_save")
         
         for event in events:
             self.recorder.observe(event, getattr(self, "_%s" % event))
@@ -75,6 +75,9 @@ class Controller(object):
     def _show_error(self, source, show, error):
         logger.warning("Error recording %s on %s: %s" % (show.name,
             source.name, error))
+    
+    def _show_save(self, source, show, location):
+        logger.info("Saved %s on %s to %s." % (source, show, location))
     
     def _show_schedule(self, source, show, start_time):
         start_time = time.strftime("%a %Y-%m-%d %H:%M:%S",

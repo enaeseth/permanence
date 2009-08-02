@@ -14,7 +14,8 @@ import contextlib
 from Queue import Queue
 
 class Recorder(EventSource):
-    HOOKS = ("startup", "shutdown", "show_start", "show_error", "show_done")
+    HOOKS = ("startup", "shutdown", "show_start", "show_error", "show_done",
+        "show_save")
     
     def __init__(self, config):
         super(Recorder, self).__init__()
@@ -41,6 +42,7 @@ class Recorder(EventSource):
             self.sources = config.sources
             self.options = config.options
             
+            self._observe_storage_drivers()
             self.__config_updated.set()
     
     def _setup_hooks(self, hooks):
@@ -57,6 +59,10 @@ class Recorder(EventSource):
             
             for description, impl in source:
                 invoker.register_hook(name, impl, description)
+    
+    def _observe_storage_drivers(self):
+        for driver in self.storage.itervalues():
+            driver.observe("save", self._recording_saved)
     
     def start(self):
         self.__shutdown_condition = threading.Condition()
@@ -214,11 +220,18 @@ class Recorder(EventSource):
         def finished(session, filename):
             clear_stop_task()
             self.fire("show_done", source=source, show=show, filename=filename)
+            self._store_recording(source, show, filename)
         
         session.observe("start", started)
         session.observe("error", error)
         session.observe("done", finished)
     
+    def _store_recording(self, source, show, temp_file):
+        for driver in source.storage:
+            driver.save(source, show, temp_file)
+        
+    def _recording_saved(self, source, show, location):
+        self.fire("show_save", source=source, show=show, location=location)
 
 class HookInvoker(EventSource):
     """
