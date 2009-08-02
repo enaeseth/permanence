@@ -91,9 +91,8 @@ class Recorder(EventSource):
         monitor = ProcessMonitor.get_instance()
         monitor.observe("empty", self._subprocesses_all_exited)
         
-        # Shut down any recording tasks that are in progress. Shutdowns are
-        # synchronus; all relevant event observers will fire each time before
-        # stop_recording() returns.
+        # Stop any recording tasks that are in progress. Shutdown will continue
+        # when all recording subprocesses exit.
         for (stop_time, stop_recording) in self._stop_tasks.itervalues():
             stop_recording()
         
