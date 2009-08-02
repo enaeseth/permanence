@@ -1,8 +1,25 @@
 Permanence
 ==========
 
-Permanence lets you record scheduled shows from an Internet radio stream to
-disk.
+Permanence lets you record scheduled shows from an audio source ([JACK][jack],
+an Internet radio stream, etc.) and save them to disk or a server. Some of
+Permanence's features:
+
+- Flexible storage: recorded files are passed to storage drivers which can do
+  anything they want with the files: copy them to a new location on disk,
+  upload them to a server, etc.
+- Extensible: you can provide new source and storage drivers to handle
+  technologies that Permanence doesn't cover out of the box
+- Open: you can install scripts and Python functions as Permanence "hooks" that
+  will get called when specific events happen, such as when Permanence finishes
+  recording a show
+
+Permanence has been used internally by [KRLX radio][krlx] to record copies of
+their productions since May 2009. If you think Permanence could be useful for
+your needs, contact us at [computing@krlx.org](mailto:computing@krlx.org).
+
+[jack]: http://www.jackaudio.org/
+[krlx]: http://www.krlx.org/
 
 License
 -------
