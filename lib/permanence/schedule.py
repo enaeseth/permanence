@@ -24,9 +24,16 @@ class WeeklySchedule(object):
     
     def get_next_time(self):
         now = time.localtime()
-        closest = self._get_closest_day_difference(now.tm_wday)
         
         future = list(now)
+        time_of_day = future[5] + (60 * future[4]) + (60 * 60 * future[3])
+        weekday = now.tm_wday
+        closest = self._get_closest_day_difference(weekday)
+        if closest == 0 and time_of_day >= self.start_time + self.duration:
+            # the time today has already passed; move to the next occurring day
+            weekday += 1
+            closest = self._get_closest_day_difference(weekday) + 1
+        
         future[3] = future[4] = future[5] = 0 # set time of day to midnight
         start = time.mktime(future) + (60 * 60 * 24) * closest
         
