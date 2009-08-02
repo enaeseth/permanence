@@ -35,7 +35,7 @@ class WeeklySchedule(object):
     
     def _get_closest_day_difference(self, today):
         return min((day - today) % 7 for day in self.weekdays)
-        
+    
     @classmethod
     def from_config(cls, config):
         def get_days(field):
@@ -84,7 +84,7 @@ class WeeklySchedule(object):
             if re.match(pattern, day_name):
                 return number
         raise ConfigurationError('Invalid day of the week %r.' % day_name)
-        
+    
     @classmethod
     def _get_current_weekday(cls):
         return time.localtime().tm_wday
