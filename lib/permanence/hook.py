@@ -67,7 +67,6 @@ def get_hook(name, exec_search_path):
         module = __import__(module, globals(), locals())
         return getattr(module, hook)
     except (ImportError, AttributeError):
-        print sys.exc_info()
         return None
     finally:
         sys.path = old_path
@@ -83,8 +82,9 @@ class ExternalScriptHook(object):
         if len(kwargs) > 0:
             try:
                 data = json.dumps(kwargs)
-            except TypeError, e:
-                raise HookExecutionError(e.message)
+            except (TypeError, ValueError), e:
+                raise HookExecutionError("failed to serialize hook arguments: "
+                    "%s" % e)
         else:
             data = None
         
