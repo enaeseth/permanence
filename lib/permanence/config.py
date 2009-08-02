@@ -9,8 +9,8 @@ Configuration loading and verification for Permanence.
 # running.
 
 from __future__ import with_statement
-from permanence.schedule import get_schedule
 import yaml
+import re
 
 class Configuration(object):
     """Configuration settings for Permanence."""
@@ -22,7 +22,7 @@ class Configuration(object):
         self.sources = sources
         self.hooks = hooks
         self.options = options
-        
+
 class RecordingSource(object):
     __slots__ = ["name", "driver", "storage", "shows"]
     
@@ -48,6 +48,8 @@ class Show(object):
 
 
 def load_config(filename):
+    from permanence.schedule import get_schedule
+    
     def read_file():
         with open(filename, "rt") as config_file:
             return yaml.load(config_file)
@@ -87,6 +89,9 @@ def load_config(filename):
         
         source_storage = []
         try:
+            if isinstance(definition['storage'], basestring):
+                definition['storage'] = re.split(r'\s*,\s*',
+                    definition['storage'])
             for storage_key in definition['storage']:
                 if storage_key not in storage:
                     raise ConfigurationError('Source %r: there is no storage '
@@ -101,7 +106,7 @@ def load_config(filename):
                 'as a name -> details mapping.' % source_name)
         
         shows = []
-        for show_name, show in definition['shows']:
+        for show_name, show in definition['shows'].iteritems():
             if not isinstance(show, dict):
                 raise ConfigurationError('The definition of show %r is not a '
                     'mapping.' % show_name)
@@ -110,7 +115,7 @@ def load_config(filename):
                     'of schedule it uses.' % show_name)
             schedule = get_schedule(show['schedule'], show)
             
-            shows.append(show_name, schedule)
+            shows.append(Show(show_name, schedule))
         
         sources[source_name] = RecordingSource(source_name, driver,
             source_storage, shows)
@@ -125,7 +130,7 @@ def load_config(filename):
 class ConfigurationError(RuntimeError):
     pass
         
-class NoSuchDriverError(RuntimeError):
+class NoSuchDriverError(ConfigurationError):
     pass
     
 def _get_driver_class(driver_type, driver_name):
