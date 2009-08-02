@@ -14,6 +14,9 @@ import yaml
 
 class Configuration(object):
     """Configuration settings for Permanence."""
+    
+    __slots__ = ["storage", "sources", "hooks", "options"]
+    
     def __init__(self, storage, sources, hooks, options):
         self.storage = storage
         self.sources = sources
@@ -21,6 +24,8 @@ class Configuration(object):
         self.options = options
         
 class RecordingSource(object):
+    __slots__ = ["name", "driver", "storage", "shows"]
+    
     def __init__(self, name, driver, storage, shows):
         self.name = name
         self.driver = driver
@@ -28,10 +33,20 @@ class RecordingSource(object):
         self.shows = shows
 
 class Show(object):
+    __slots__ = ["name", "schedule"]
+    
     def __init__(self, name, schedule):
         self.name = name
         self.schedule = schedule
         
+    def __eq__(self, other):
+        return (isinstance(other, Show) and self.name == other.name and
+            self.schedule == other.schedule)
+    
+    def __hash__(self):
+        return hash(("Show", self.name, self.schedule))
+
+
 def load_config(filename):
     def read_file():
         with open(filename, "rt") as config_file:
