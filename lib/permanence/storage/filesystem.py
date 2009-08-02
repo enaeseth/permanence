@@ -21,7 +21,7 @@ class FilesystemDriver(EventSource):
         dest_filename = self.path_creator(source, show) + extension
         
         shutil.copy2(source, dest_filename)
-        self.fire("save", source=source, show=show, filename=dest_filename)
+        self.fire("save", source=source, show=show, location=dest_filename)
     
     @classmethod
     def from_config(cls, config):
