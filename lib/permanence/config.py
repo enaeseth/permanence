@@ -14,9 +14,10 @@ import yaml
 
 class Configuration(object):
     """Configuration settings for Permanence."""
-    def __init__(self, storage, sources, options):
+    def __init__(self, storage, sources, hooks, options):
         self.storage = storage
         self.sources = sources
+        self.hooks = hooks
         self.options = options
         
 class RecordingSource(object):
@@ -99,12 +100,12 @@ def load_config(filename):
         sources[source_name] = RecordingSource(source_name, driver,
             source_storage, shows)
     
-    options = object()
-    raw_options = raw.get('options')
-    if raw_options:
-        options.leeway = raw_options.get('leeway', 0)
+    hooks = raw.get('hooks', {})
     
-    return Configuration(storage, sources, options)
+    options = raw.get('options', {})
+    options.setdefault("leeway", 0)
+    
+    return Configuration(storage, sources, hooks, options)
     
 class ConfigurationError(RuntimeError):
     pass
