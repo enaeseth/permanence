@@ -20,7 +20,7 @@ class Recorder(EventSource):
     def __init__(self, config):
         super(Recorder, self).__init__()
         self._hooks = self._create_hook_invoker(config.options)
-        self.__reload_lock = threading.Lock()
+        self.__reload_lock = threading.RLock()
         self.__config_updated = threading.Event()
         self._start_tasks = {}
         self._stop_tasks = {}
