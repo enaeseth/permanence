@@ -176,6 +176,12 @@ class Recorder(EventSource):
         
         self._observe_session_events(source, show, session)
         
+        def stop():
+            try:
+                session.stop()
+            except RuntimeError:
+                pass # there was nothing to stop
+        
         def start():
             # We might not actually be starting at the scheduled start time;
             # for example, Permanence might have been started in the middle of
@@ -200,7 +206,7 @@ class Recorder(EventSource):
             else:
                 session.start()
             
-            return (stop_time, session.stop)
+            return (stop_time, stop)
         
         return (start_time, start)
     
