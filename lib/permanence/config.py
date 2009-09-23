@@ -31,6 +31,9 @@ class RecordingSource(object):
         self.driver = driver
         self.storage = storage
         self.shows = shows
+    
+    def __str__(self):
+        return self.name
 
 class Show(object):
     __slots__ = ["name", "schedule"]
@@ -45,7 +48,9 @@ class Show(object):
     
     def __hash__(self):
         return hash(("Show", self.name, self.schedule))
-
+    
+    def __str__(self):
+        return self.name
 
 def load_config(filename):
     from permanence.schedule import get_schedule
