@@ -30,7 +30,7 @@ class Controller(object):
     
     def run(self):
         try:
-            logger.debug("Loading configuration from %r." %
+            self.logger.debug("Loading configuration from %r." %
                 self.config_filename)
             config = load_config(self.config_filename)
             self.recorder = Recorder(config)
@@ -40,7 +40,7 @@ class Controller(object):
             self.logger.error("Failed to load configuration: %s" % e)
     
     def reload_config(self):
-        logger.debug("Reloading configuration.")
+        self.logger.debug("Reloading configuration.")
         try:
             config = load_config(self.config_filename)
             self.recorder.apply_configuration(config)
@@ -49,7 +49,7 @@ class Controller(object):
             self.logger.error("Failed to reload configuration: %s" % e)
     
     def shutdown(self):
-        logger.info("Shutting down.")
+        self.logger.info("Shutting down.")
         self.recorder.stop()
     
     def _observe_events(self):
@@ -60,29 +60,32 @@ class Controller(object):
             self.recorder.observe(event, getattr(self, "_%s" % event))
     
     def _startup(self):
-        logger.info("Recorder has started running.")
+        self.logger.info("Recorder has started running.")
     
     def _shutdown(self):
-        logger.info("Recorder has shut down.")
+        self.logger.info("Recorder has shut down.")
     
     def _show_start(self, source, show):
-        logger.info("Starting to record %s on %s." % (show.name, source.name))
+        self.logger.info("Starting to record %s on %s." % (show.name,
+            source.name))
     
     def _show_done(self, source, show, filename):
-        logger.info("Finished recording %s on %s." % (show.name, source.name))
-        logger.debug("Temporarily saved %s to %s." % (show.name, filename))
+        self.logger.info("Finished recording %s from %s." %
+            (show.name, source.name))
+        self.logger.debug("Temporarily saved %s to %s." % (show.name,
+            filename))
     
     def _show_error(self, source, show, error):
-        logger.warning("Error recording %s on %s: %s" % (show.name,
+        self.logger.warning("Error recording %s from %s: %s" % (show.name,
             source.name, error))
     
     def _show_save(self, source, show, location):
-        logger.info("Saved %s on %s to %s." % (source, show, location))
+        self.logger.info("Saved %s from %s to %s." % (source, show, location))
     
     def _show_schedule(self, source, show, start_time):
         start_time = time.strftime("%a %Y-%m-%d %H:%M:%S",
             time.localtime(start_time))
-        logger.debug("%s on %s next scheduled to be recorded at %s." %
+        self.logger.debug("%s next scheduled to be recorded from %s at %s." %
             (show.name, source.name, start_time))
 
 def daemonize():
