@@ -40,7 +40,8 @@ class FilesystemDriver(EventSource):
     def compile_path_pattern(cls, pattern):
         def path_formatter(fn):
             def path_format(source, show):
-                return re.sub(r'\W+', '', re.sub(r'\s+', '_', fn()))
+                return re.sub(r'\W+', '', re.sub(r'\s+', '_',
+                    fn(source, show))).lower()
             return path_format
         
         def get_segments():
