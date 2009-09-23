@@ -20,7 +20,7 @@ class FilesystemDriver(EventSource):
         extension = os.path.splitext(file_path)[1]
         dest_filename = self.path_creator(source, show) + extension
         
-        shutil.copy2(source, dest_filename)
+        shutil.copy2(file_path, dest_filename)
         self.fire("save", source=source, show=show, location=dest_filename)
     
     @classmethod
