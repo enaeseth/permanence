@@ -101,7 +101,7 @@ class FilesystemDriver(EventSource):
                 
                 result.append(value)
             
-            return result
+            return ''.join(result)
         
         return fill_pattern
 Driver = FilesystemDriver
