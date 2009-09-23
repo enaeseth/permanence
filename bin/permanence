@@ -80,7 +80,7 @@ class Controller(object):
             source.name, error))
     
     def _show_save(self, source, show, location):
-        self.logger.info("Saved %s from %s to %s." % (source, show, location))
+        self.logger.info("Saved %s from %s to %s." % (show, source, location))
     
     def _show_schedule(self, source, show, start_time):
         start_time = time.strftime("%a %Y-%m-%d %H:%M:%S",
