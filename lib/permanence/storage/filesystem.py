@@ -94,9 +94,9 @@ class FilesystemDriver(EventSource):
             
             for segment in segments:
                 value = None
-                try:
+                if hasattr(segment, '__call__'):
                     value = segment(source, show)
-                except TypeError:
+                else:
                     value = segment
                 
                 result.append(value)
