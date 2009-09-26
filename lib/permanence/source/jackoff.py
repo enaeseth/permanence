@@ -18,8 +18,9 @@ import signal
 import re
 
 class JackoffDriver(object):
-    def __init__(self, executable, format, bitrate, channels, name):
+    def __init__(self, executable, ports, format, bitrate, channels, name):
         self.executable = executable
+        self.ports = ports
         self.format = format
         self.bitrate = bitrate
         self.channels = channels
@@ -35,13 +36,14 @@ class JackoffDriver(object):
         format = config.get("format")
         bitrate = config.get("bitrate")
         channels = config.get("channels")
+        ports = config.get("ports")
         
         if bitrate:
             bitrate = int(bitrate)
         if channels:
             channels = int(channels)
         
-        return cls(executable, format, bitrate, channels, name)
+        return cls(executable, ports, format, bitrate, channels, name)
     
     def __repr__(self):
         return "%s(%r, %r, %r, %r, %r)" % (type(self).__name__,
@@ -69,7 +71,7 @@ class JackoffSession(EventSource):
         return os.path.join(directory, name)
     
     def start(self, duration=None):
-        args = [self.driver.executable, "--auto-connect"]
+        args = [self.driver.executable]
         if duration:
             args.extend(["-d", "%d" % duration])
             self.duration = duration
@@ -83,6 +85,8 @@ class JackoffSession(EventSource):
             args.extend(["-b", "%d" % self.driver.bitrate])
         if self.driver.channels:
             args.extend(["-c", "%d" % self.driver.channels])
+        if self.driver.ports:
+            args.extend(["-p", ','.join(self.driver.ports)]);
         if self.driver.client_name:
             args.extend(["-n", self.driver.client_name])
         
