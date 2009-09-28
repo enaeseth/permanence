@@ -81,7 +81,7 @@ class ExternalScriptHook(object):
     def __call__(self, **kwargs):
         if len(kwargs) > 0:
             try:
-                data = json.dumps(kwargs)
+                data = json.dumps(kwargs, cls=PermanenceJSONEncoder)
             except (TypeError, ValueError), e:
                 raise HookExecutionError("failed to serialize hook arguments: "
                     "%s" % e)
@@ -109,3 +109,15 @@ class ExternalScriptHook(object):
     
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.path)
+
+class PermanenceJSONEncoder(json.JSONEncoder):
+    encoders = []
+    
+    def default(self, obj):
+        for custom_type, encoder in self.encoders:
+            if isinstance(obj, custom_type):
+                return encoder(obj)
+        return json.JSONEncoder.default(obj)
+
+def add_json_serializer(custom_type, encoder):
+    PermanenceJSONEncoder.encoders.append((custom_type, encoder))

@@ -9,6 +9,7 @@ Configuration loading and verification for Permanence.
 # running.
 
 from __future__ import with_statement
+from permanence.hook import add_json_serializer
 import yaml
 import re
 
@@ -34,6 +35,11 @@ class RecordingSource(object):
     
     def __str__(self):
         return self.name
+    
+    def json_friendly(self):
+        return self.name
+
+add_json_serializer(RecordingSource, RecordingSource.json_friendly)
 
 class Show(object):
     __slots__ = ["name", "schedule"]
@@ -51,6 +57,13 @@ class Show(object):
     
     def __str__(self):
         return self.name
+    
+    def json_friendly(self):
+        return {
+            "name": self.name,
+            "schedule": self.schedule
+        }
+add_json_serializer(Show, Show.json_friendly)
 
 def load_config(filename):
     from permanence.schedule import get_schedule

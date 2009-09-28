@@ -7,6 +7,7 @@ Handling of show schedules.
 import re
 import time
 from permanence.config import ConfigurationError
+from permanence.hook import add_json_serializer
 
 _implementations = {}
 def get_schedule(kind, definition):
@@ -109,4 +110,13 @@ class WeeklySchedule(object):
     def __hash__(self):
         return hash(("WeeklySchedule", self.weekdays, self.start_time,
             self.duration))
+    
+    def json_friendly(self):
+        return {
+            "weekdays": self.weekdays,
+            "start_time": self.start_time,
+            "duration": self.duration
+        }
 _implementations['weekly'] = WeeklySchedule
+
+add_json_serializer(WeeklySchedule, WeeklySchedule.json_friendly)
