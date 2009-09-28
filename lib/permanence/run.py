@@ -77,6 +77,10 @@ class Recorder(EventSource):
         self.__active = False
         with self.__shutdown_condition:
             self.__shutdown_condition.notify()
+        
+        for driver in self.storage:
+            if hasattr(driver, 'shutdown'):
+                driver.shutdown()
     
     def _run(self):
         self.fire("startup")
