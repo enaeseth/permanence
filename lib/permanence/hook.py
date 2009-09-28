@@ -43,7 +43,7 @@ def get_hook(name, exec_search_path):
     
     if re.match(r'^(/|\\\\|[A-Za-z]:\\)', name):
         # absolute path
-        return get_exec_hook(path)
+        return get_exec_hook(name)
     
     if not exec_search_path:
         exec_search_path = []
