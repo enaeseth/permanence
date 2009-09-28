@@ -79,7 +79,7 @@ class Recorder(EventSource):
         with self.__shutdown_condition:
             self.__shutdown_condition.notify()
         
-        for driver in self.storage:
+        for driver in self.storage.itervalues():
             if hasattr(driver, 'shutdown'):
                 driver.shutdown()
     
