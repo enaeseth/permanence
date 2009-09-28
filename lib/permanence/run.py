@@ -8,6 +8,7 @@ from __future__ import with_statement
 
 from permanence.event import EventSource
 from permanence.monitor import ProcessMonitor
+from permanence.hook import get_hook
 import threading
 import time
 import contextlib
@@ -54,10 +55,11 @@ class Recorder(EventSource):
             try:
                 source = implementations.iteritems()
             except AttributeError:
-                source = ("%s:%d" % (name, i + 1)
+                source = (("%s:%d" % (name, i + 1), implementations[i])
                     for i in enumerate(implementations))
             
             for description, impl in source:
+                impl = get_hook(impl, [])
                 invoker.register_hook(name, impl, description)
     
     def _observe_storage_drivers(self):
