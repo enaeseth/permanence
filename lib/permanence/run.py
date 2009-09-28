@@ -63,6 +63,7 @@ class Recorder(EventSource):
     def _observe_storage_drivers(self):
         for driver in self.storage.itervalues():
             driver.observe("save", self._recording_saved)
+            driver.observe("error", self._recording_error)
     
     def start(self):
         self.__shutdown_condition = threading.Condition()
@@ -242,6 +243,9 @@ class Recorder(EventSource):
         
     def _recording_saved(self, source, show, location):
         self.fire("show_save", source=source, show=show, location=location)
+    
+    def _recording_error(self, source, show, error):
+        self.fire("show_error", source=source, show=show, error=error)
 
 class HookInvoker(EventSource):
     """
