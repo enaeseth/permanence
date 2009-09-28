@@ -33,6 +33,11 @@ class Recorder(EventSource):
         for hook_name in self.HOOKS:
             invoker.create_hook(hook_name)
         invoker.observe_events(self)
+        
+        def hook_failed(description, error):
+            self.fire("hook_failure", description=description, error=error)
+        invoker.observe("failure", hook_failed)
+        
         return invoker
     
     def apply_configuration(self, config):

@@ -54,7 +54,7 @@ class Controller(object):
     
     def _observe_events(self):
         events = ("startup", "shutdown", "show_start", "show_done",
-            "show_error", "show_schedule", "show_save")
+            "show_error", "show_schedule", "show_save", "hook_failure")
         
         for event in events:
             self.recorder.observe(event, getattr(self, "_%s" % event))
@@ -87,6 +87,9 @@ class Controller(object):
             time.localtime(start_time))
         self.logger.debug("%s next scheduled to be recorded from %s at %s." %
             (show.name, source.name, start_time))
+    
+    def _hook_failure(self, description, error):
+        self.logger.warning("Error running hook %s: %s" % (description, error))
 
 def daemonize():
     # http://code.activestate.com/recipes/278731/
