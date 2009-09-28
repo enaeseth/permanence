@@ -106,7 +106,6 @@ class ExternalScriptHook(object):
                 return None
         except OSError, e:
             raise HookExecutionError("failed to execute hook: %s" % e.message)
-        
-            
+    
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.path)
