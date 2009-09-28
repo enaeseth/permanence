@@ -9,8 +9,6 @@ from permanence.event import EventSource
 from permanence.storage.util import compile_path_pattern
 import os.path
 import shutil
-import time
-import re
 
 class FilesystemDriver(EventSource):
     def __init__(self, path_creator):
