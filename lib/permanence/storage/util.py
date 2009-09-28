@@ -4,6 +4,61 @@
 Utility code for storage drivers.
 """
 
+import re
+import sys
+import time
+import threading
+
+class ActionQueue(object):
+    def __init__(self, handler, worker_count=2, error_handler=None):
+        self._handler = handler
+        self._queue = []
+        self._queue_control = threading.Lock()
+        self._running = True
+        self._error_handler = error_handler
+        self._create_workers(worker_count)
+    
+    def _create_workers(self, worker_count):
+        def create_thread():
+            thread = threading.Thread(target=self._run)
+            thread.start()
+            return thread
+        
+        self._workers = [create_thread() for i in xrange(worker_count)]
+    
+    def _run(self):
+        def execute_task(item, attempt):
+            try:
+                self._handler(item)
+            except Exception:
+                if self._error_handler:
+                    self._error_handler(*sys.exc_info())
+                self._schedule(item, attempt + 1)
+        
+        while self._running:
+            with self._queue_control:
+                now = time.time()
+                
+                for i in xrange(len(self._queue)):
+                    if now >= self._queue[i][2]:
+                        task = self._queue.pop(i)
+                        execute_task(task[0], task[1])
+                        break
+            
+            time.sleep(0.5)
+    
+    def add(self, item):
+        self._schedule(item, 0)
+    
+    def _schedule(self, item, attempt):
+        delay = (1.6 ** attempt) if attempt > 0 else 0
+        
+        with self._queue_control:
+            self._queue.append((item, attempt, time.time() + delay))
+    
+    def shutdown(self):
+        self._running = False
+
 def compile_path_pattern(pattern):
     def path_formatter(fn):
         def path_format(source, show):
