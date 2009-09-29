@@ -14,6 +14,106 @@ import time
 import contextlib
 from Queue import Queue
 
+class ShowManager(object):
+    class ManagedShow(object):
+        def __init__(self, source, start_time, duration):
+            self.source = source
+            self.start_time = start_time
+            self.duration = duration
+            self.session = None
+            self.stop_time = None
+    
+    def __init__(self):
+        self._shows = {}
+        self._show_access = threading.RLock()
+    
+    def _get_next_time(self, schedule):
+        return schedule.get_next_time() or None, None
+    
+    def add_show(self, key, source, schedule):
+        with self._show_access:
+            start_time, duration = self._get_next_time(schedule)
+            
+            if key not in self._shows:
+                self._shows[key] = self.ManagedShow(source, start_time,
+                    duration)
+                return True
+            
+            existing = self._shows[key]
+            identical = (existing.start_time == start_time and
+                existing.duration == duration and
+                existing.source == source)
+            if identical:
+                return False
+            
+            existing.source = source
+            existing.start_time = start_time
+            existing.duration = duration
+            
+            if existing.session and existing.stop_time:
+                # if the new schedule increases the stop time of the session,
+                # update it
+                
+                new_stop_time = start_time + duration
+                if existing.stop_time < new_stop_time:
+                    existing.stop_time = new_stop_time
+            
+            return True
+    
+    def get_keys(self):
+        with self._show_access:
+            return set(self._shows.iterkeys())
+    
+    def remove_show(self, key):
+        with self._show_access:
+            if key not in self._shows:
+                return False
+            
+            show = self._shows[key]
+            if not show.session:
+                # this show is not currently being recorded; just delete it
+                del self._shows[key]
+            else:
+                # clear out the record; it will be removed when the recording
+                # session is done
+                show.source = show.start_time = show.duration = None
+            return True
+    
+    def get_shows_to_start(self):
+        now = time.time()
+        
+        with self._show_access:
+            return [(key, s.source, s.duration - (now - s.start_time))
+                for key, s in self._shows.iteritems()
+                if s.session is None and s.source and now >= s.start_time]
+    
+    def set_session(self, key, session, stop_time):
+        with self._show_access:
+            try:
+                show = self._shows[key]
+            except KeyError:
+                return False
+            else:
+                show.session = session
+                show.stop_time = stop_time
+                return True
+    
+    def get_sessions_to_stop(self):
+        sessions = []
+        now = time.time()
+        
+        with self._show_access:
+            for key, show in self._shows.iteritems():
+                if s.session is None or now < s.stop_time:
+                    continue
+                
+                sessions.append((key, show.session))
+            
+            for session in sessions:
+                del self._shows[session[0]]
+        
+        return sessions
+
 class Recorder(EventSource):
     HOOKS = ("startup", "shutdown", "show_start", "show_error", "show_done",
         "show_save")
