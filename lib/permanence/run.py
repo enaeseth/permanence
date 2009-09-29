@@ -223,7 +223,7 @@ class Recorder(EventSource):
         return (start_time, start)
     
     def _observe_session_events(self, source, show, session):
-        def clear_stop_task():
+        def clear_stop_task(was_ok):
             def do_nothing():
                 pass
             
@@ -231,17 +231,18 @@ class Recorder(EventSource):
                 try:
                     key = (source.name, show)
                     current = self._stop_tasks[key]
-                    self._stop_tasks[key] = (time.time() + 1, do_nothing)
+                    stop_time = time.time() + 1 if was_ok else current[0]
+                    self._stop_tasks[key] = (stop_time, do_nothing)
                 except KeyError:
                     pass
         
         def started(session, **kwargs):
             self.fire("show_start", source=source, show=show)
         def error(session, error):
-            clear_stop_task()
+            clear_stop_task(False)
             self.fire("show_error", source=source, show=show, error=error)
         def finished(session, filename):
-            clear_stop_task()
+            clear_stop_task(True)
             self.fire("show_done", source=source, show=show, filename=filename)
             self._store_recording(source, show, filename)
         
