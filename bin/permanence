@@ -53,8 +53,9 @@ class Controller(object):
         self.recorder.stop()
     
     def _observe_events(self):
-        events = ("startup", "shutdown", "show_start", "show_done",
-            "show_error", "show_schedule", "show_save", "hook_failure")
+        events = ("startup", "shutdown", "show_add", "show_update",
+            "show_remove", "show_schedule", "show_start", "show_done",
+            "show_error", "show_save", "hook_failure")
         
         for event in events:
             self.recorder.observe(event, getattr(self, "_%s" % event))
@@ -64,6 +65,15 @@ class Controller(object):
     
     def _shutdown(self):
         self.logger.info("Recorder has shut down.")
+    
+    def _show_add(self, source, show):
+        self.logger.debug("Added show %s on %s." % (show.name, source.name))
+    
+    def _show_update(self, source, show):
+        self.logger.debug("Updated show %s on %s." % (show.name, source.name))
+    
+    def _show_remove(self, source, show):
+        self.logger.debug("Removed show %s on %s." % (show.name, source.name))
     
     def _show_start(self, source, show):
         self.logger.info("Starting to record %s on %s." % (show.name,
