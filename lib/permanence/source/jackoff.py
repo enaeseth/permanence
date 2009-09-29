@@ -49,6 +49,18 @@ class JackoffDriver(object):
         return "%s(%r, %r, %r, %r, %r)" % (type(self).__name__,
             self.executable, self.format, self.bitrate, self.channels,
             self.name)
+    
+    def __eq__(self, other):
+        return (isinstance(other, JackoffDriver) and
+            self.executable == other.executable and
+            self.ports == other.ports and
+            self.format == other.format and
+            self.bitrate == other.bitrate and
+            self.channels == other.channels and
+            self.client_name == other.client_name)
+    
+    def __ne__(self, other):
+        return not (self == other)
 
 class JackoffSession(EventSource):
     def __init__(self, driver, show_name, identifier):

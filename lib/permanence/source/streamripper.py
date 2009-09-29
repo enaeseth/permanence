@@ -38,6 +38,14 @@ class StreamRipperDriver(object):
     def __repr__(self):
         return "%s(%r, %r)" % (type(self).__name__, self.executable,
             self.stream)
+    
+    def __eq__(self, other):
+        return (isinstance(other, StreamRipperDriver) and
+            self.executable == other.executable and
+            self.stream == other.stream)
+    
+    def __ne__(self, other):
+        return not (self == other)
 
 class StreamRipperSession(EventSource):
     def __init__(self, driver, show_name, identifier):
