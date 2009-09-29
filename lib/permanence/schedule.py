@@ -54,23 +54,37 @@ class WeeklySchedule(object):
                 return [cls._convert_weekday(day) for day in weekdays]
             except KeyError:
                 return None
+        
+        def get_time(field):
+            time = config.get(field)
+            if time is None:
+                return None
+            
+            if isinstance(time, basestring):
+                match = re.match(r'^(?:(\d+):)?(\d+):(\d+)', time)
+                if match:
+                    parts = map(int, match.groups(0))
+                    time = parts[2] + parts[1] * 60 + parts[0] * 60 * 60
+                else:
+                    raise ConfigurationError('invalid time value %r' % time)
+            return time
                 
         weekdays = get_days('weekdays') or get_days('weekday')
         if not weekdays:
             raise ConfigurationError('no weekdays defined in schedule')
         
-        start_time = config.get('start')
+        start_time = get_time('start')
         if start_time is None:
             raise ConfigurationError('no start time defined in schedule')
         
-        end_time = config.get('end')
+        end_time = get_time('end')
         if end_time is not None:
             if end_time < start_time:
                 # show ends on following day; add 24 hours to end time
                 end_time += (60 * 24 * 24)
             duration = end_time - start_time
         else:
-            duration = config.get('duration')
+            duration = get_time('duration')
             if not duration:
                 raise ConfigurationError('no duration or end time defined '
                     'in schedule')
