@@ -57,7 +57,6 @@ class SFTPDriver(EventSource):
         source, show, source_path, dest_path = item
         
         client = paramiko.SSHClient()
-        client.load_system_host_keys()
         
         try:
             client.connect(self.host, self.port, self.username, self.password,
