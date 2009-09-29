@@ -16,7 +16,8 @@ from Queue import Queue
 
 class ShowManager(object):
     class ManagedShow(object):
-        def __init__(self, source, start_time, duration):
+        def __init__(self, token, source, start_time, duration):
+            self.token = token
             self.source = source
             self.start_time = start_time
             self.duration = duration
@@ -30,12 +31,12 @@ class ShowManager(object):
     def _get_next_time(self, schedule):
         return schedule.get_next_time() or None, None
     
-    def add_show(self, key, source, schedule):
+    def add_show(self, key, token, source, schedule):
         with self._show_access:
             start_time, duration = self._get_next_time(schedule)
             
             if key not in self._shows:
-                self._shows[key] = self.ManagedShow(source, start_time,
+                self._shows[key] = self.ManagedShow(token, source, start_time,
                     duration)
                 return True
             
@@ -46,6 +47,7 @@ class ShowManager(object):
             if identical:
                 return False
             
+            existing.token = token
             existing.source = source
             existing.start_time = start_time
             existing.duration = duration
@@ -67,7 +69,7 @@ class ShowManager(object):
     def remove_show(self, key):
         with self._show_access:
             if key not in self._shows:
-                return False
+                return None
             
             show = self._shows[key]
             if not show.session:
@@ -77,13 +79,13 @@ class ShowManager(object):
                 # clear out the record; it will be removed when the recording
                 # session is done
                 show.source = show.start_time = show.duration = None
-            return True
+            return show.token
     
     def get_shows_to_start(self):
         now = time.time()
         
         with self._show_access:
-            return [(key, s.source, s.duration - (now - s.start_time))
+            return [(key, s.token, s.source, s.duration - (now - s.start_time))
                 for key, s in self._shows.iteritems()
                 if s.session is None and s.source and now >= s.start_time]
     
