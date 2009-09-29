@@ -83,9 +83,9 @@ class Controller(object):
         self.logger.info("Saved %s from %s to %s." % (show, source, location))
     
     def _show_schedule(self, source, show, start_time):
-        start_time = time.strftime("%a %Y-%m-%d %H:%M:%S",
+        start_time = time.strftime("%a %Y-%m-%d at %H:%M:%S",
             time.localtime(start_time))
-        self.logger.debug("%s next scheduled to be recorded from %s at %s." %
+        self.logger.debug("%s next scheduled to be recorded from %s on %s." %
             (show.name, source.name, start_time))
     
     def _hook_failure(self, description, error):
