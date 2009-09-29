@@ -113,10 +113,10 @@ class ShowManager(EventSource):
         
         with self._show_access:
             for key, show in self._shows.iteritems():
-                if s.session is None or now < s.stop_time:
+                if show.session is None or now < show.stop_time:
                     continue
                 
-                sessions.append((key, show.session))
+                sessions.append((key, show.token, show.session))
             
             for session in sessions:
                 del self._shows[session[0]]
