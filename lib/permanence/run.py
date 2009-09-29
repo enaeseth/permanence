@@ -122,6 +122,12 @@ class ShowManager(EventSource):
                 del self._shows[session[0]]
         
         return sessions
+    
+    def get_all_sessions(self):
+        with self._show_access:
+            return [(key, show.session)
+                for key, show in self._shows.iteritems()
+                if show.session is not None]
 
 class Recorder(EventSource):
     HOOKS = ("startup", "shutdown", "show_start", "show_error", "show_done",
