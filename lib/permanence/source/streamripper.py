@@ -103,7 +103,8 @@ class StreamRipperSession(EventSource):
             self.fire("error", session=self, error="streamripper exited with "
                 "status %d after %s" % (return_code, elapsed_time))
         elif self.expected_shutdown and time.time() < self.expected_shutdown:
-            expected_shutdown = time.strftime("%Hh%Mm%Ss", self.duration)
+            expected_shutdown = time.strftime("%Hh%Mm%Ss",
+                time.gmtime(self.duration))
             self.fire("error", session=self, error="streamripper exited "
                 "early, after only %s (expected %s)" %
                 (elapsed_time, expected_shutdown))

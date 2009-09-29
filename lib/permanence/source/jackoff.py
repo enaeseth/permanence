@@ -136,7 +136,8 @@ class JackoffSession(EventSource):
             self.fire("error", session=self, error="jackoff exited with "
                 "status %d after %s" % (return_code, elapsed_time))
         elif ended_early:
-            expected_shutdown = time.strftime("%Hh%Mm%Ss", self.duration)
+            expected_shutdown = time.strftime("%Hh%Mm%Ss",
+                self.gmtime(self.duration))
             self.fire("error", session=self, error="jackoff exited early, "
                 "after only %s (expected %s)" %
                 (elapsed_time, expected_shutdown))
