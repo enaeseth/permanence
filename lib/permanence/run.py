@@ -164,7 +164,7 @@ class Recorder(EventSource):
                 if self._set_start_task(source, show):
                     found_keys.add(key)
         
-        for key in self._start_tasks:
+        for key in self._start_tasks.keys():
             if key not in found_keys:
                 del self._start_tasks[key]
     
