@@ -224,9 +224,14 @@ class Recorder(EventSource):
     
     def _observe_session_events(self, source, show, session):
         def clear_stop_task():
+            def do_nothing():
+                pass
+            
             with self.__reload_lock:
                 try:
-                    del self._stop_tasks[(source.name, show)]
+                    key = (source.name, show)
+                    current = self._stop_tasks[key]
+                    self._stop_tasks[key] = (time.time() + 1, do_nothing)
                 except KeyError:
                     pass
         
