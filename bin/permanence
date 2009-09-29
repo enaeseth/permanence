@@ -135,10 +135,12 @@ if __name__ == '__main__':
     parser.add_option('-p', '--pid-file', dest='pid_file',
         metavar='FILENAME', help='location to which the process ID will be '
         'written')
+    parser.add_option('-v', '--verbose', dest='verbose', action='store_true',
+        help="don't hold back on the logging front")
     
     base = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))
     
-    parser.set_defaults(foreground=False,
+    parser.set_defaults(foreground=False, verbose=False,
         config_file=os.path.join(base, 'etc', 'permanence.yaml'),
         log_dir=os.path.join(base, 'log'),
         pid_file=os.path.join(base, 'run', 'permanence.pid'))
@@ -155,7 +157,10 @@ if __name__ == '__main__':
         log_file = os.path.join(options.log_dir, 'permanence.log')
         handler = logging.handlers.TimedRotatingFileHandler(log_file,
             'W0', 1, 10, 'UTF-8')
-        logger.setLevel(logging.INFO)
+        if options.verbose:
+            logger.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.INFO)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     
