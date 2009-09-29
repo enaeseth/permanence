@@ -138,8 +138,8 @@ class Recorder(EventSource):
         self._hooks = self._create_hook_invoker(config.options)
         self.__reload_lock = threading.RLock()
         self.__config_updated = threading.Event()
-        self._start_tasks = {}
-        self._stop_tasks = {}
+        self._manager = ShowManager()
+        self._manager.observe('schedule', self._show_scheduled)
         
         self.apply_configuration(config)
     
@@ -226,9 +226,11 @@ class Recorder(EventSource):
         
         # Stop any recording tasks that are in progress. Shutdown will continue
         # when all recording subprocesses exit.
-        for (stop_time, stop_recording) in self._stop_tasks.itervalues():
-            stop_recording()
-        
+        for key, session in self._manager.get_all_sessions():
+            try:
+                session.stop()
+            except RuntimeError:
+                pass
     
     def _subprocesses_all_exited(self):
         ProcessMonitor.get_instance().halt()
@@ -236,134 +238,88 @@ class Recorder(EventSource):
     
     def _tick(self):
         if self.__config_updated.isSet():
-            self._update_upcoming()
+            self._update_manager()
             self.__config_updated.clear()
         
         now = time.time()
-        starts_to_clear = []
-        for key, (start_time, start_recording) in self._start_tasks.iteritems():
-            if now >= start_time:
-                stop_task = start_recording()
-                if stop_task:
-                    self._stop_tasks[key] = stop_task
-                starts_to_clear.append(key)
-        
-        for key in starts_to_clear:
-            del self._start_tasks[key]
-        
-        stops_to_clear = []
-        for key, (stop_time, stop_recording) in self._stop_tasks.iteritems():
-            if now >= stop_time:
-                stop_recording()
-                stops_to_clear.append(key)
-                source_name, show = key
-                try:
-                    source = self.sources[source_name]
-                except KeyError:
-                    # the source was removed since the recording session was
-                    # started
-                    continue
-                
-                self._set_start_task(source, show)
-        
-        for key in stops_to_clear:
-            del self._stop_tasks[key]
-    
-    def _update_upcoming(self):
-        found_keys = set()
-        keys_to_remove = []
-        for source_name, source in self.sources.iteritems():
-            for show in source.shows:
-                key = (source_name, show)
-                
-                if self._set_start_task(source, show):
-                    found_keys.add(key)
-        
-        for key in self._start_tasks.keys():
-            if key not in found_keys:
-                del self._start_tasks[key]
-    
-    def _set_start_task(self, source, show):
-        start_task = self._create_start_task(source, show)
-        if start_task:
-            start_time = start_task[0]
-            self.fire("show_schedule", source=source, show=show,
-                start_time=start_time)
-            key = (source.name, show)
-            self._start_tasks[key] = start_task
-            return key
-        return None
-    
-    def _create_start_task(self, source, show):
-        session = source.driver.spawn(show.name)
-        
-        start_time, duration = show.schedule.get_next_time()
-        if not (start_time and duration):
-            return None
-        
-        self._observe_session_events(source, show, session)
-        
-        def stop():
+        for key, token, driver, duration in self._manager.get_shows_to_start():
+            stop_time = now + duration
+            
+            source, show = token
+            session = driver.spawn(key[1])
+            if session.can_stop_automatically(duration):
+                stop_time += 3
+            
+            self._observe_session_events(source, show, session)
+            session.start()
+            self._manager.set_session(key, session, stop_time)
+            
+        for key, token, session in self._manager.get_sessions_to_stop():
             try:
                 session.stop()
             except RuntimeError:
-                pass # there was nothing to stop
-        
-        def start():
-            # We might not actually be starting at the scheduled start time;
-            # for example, Permanence might have been started in the middle of
-            # the show.
-            now = time.time()
-            real_duration = duration - (now - start_time)
-            
-            can_stop = session.can_stop_automatically(real_duration)
-            
-            stop_time = now + real_duration
-            if can_stop:
-                session.start(real_duration)
-                # A stop action is created even if the session says it can stop
-                # on its own. We want all sessions to be stopped gracefully
-                # when the recorder is shut down, and since stop actions are
-                # run on shutdown, creating one for self-stopping sessions is
-                # an easy way to make that happen. Since ten seconds are added
-                # to the stop time, the only other reason a session would be
-                # stopped by the Recorder would be if the session was failing
-                # to self-stop.
-                stop_time += 10
-            else:
-                session.start()
-            
-            return (stop_time, stop)
-        
-        return (start_time, start)
-    
-    def _observe_session_events(self, source, show, session):
-        def clear_stop_task(was_ok):
-            def do_nothing():
                 pass
             
-            with self.__reload_lock:
-                try:
-                    key = (source.name, show)
-                    current = self._stop_tasks[key]
-                    stop_time = time.time() + 1 if was_ok else current[0]
-                    self._stop_tasks[key] = (stop_time, do_nothing)
-                except KeyError:
-                    pass
+            self._reschedule_show(*key)
+    
+    def _update_manager(self):
+        existing_keys = self._manager.get_keys()
+        updated_keys = set()
         
+        for source_name, source in self.sources.iteritems():
+            for show in source.shows:
+                key = (source_name, show.name)
+                updated_keys.add(key)
+                token = (source, show)
+                
+                changed = self._manager.add_show(key, token, source.driver,
+                    show.schedule)
+                if changed:
+                    event = ('show_update' if key in existing_keys
+                        else 'show_add')
+                    self.fire(event, source=source, show=show)
+        
+        keys_to_remove = (existing_keys - updated_keys)
+        for key in keys_to_remove:
+            token = self._manager.remove_show(key)
+            if token:
+                self.fire('show_remove', source=token[0], show=token[1])
+    
+    def _observe_session_events(self, source, show, session):
         def started(session, **kwargs):
             self.fire("show_start", source=source, show=show)
         def error(session, error):
-            clear_stop_task(False)
             self.fire("show_error", source=source, show=show, error=error)
         def finished(session, filename):
-            clear_stop_task(True)
             self.fire("show_done", source=source, show=show, filename=filename)
             self._store_recording(source, show, filename)
         
         session.observe("start", started)
         session.observe("error", error)
         session.observe("done", finished)
+    
+    def _show_scheduled(self, key, token, start_time, duration):
+        source, show = token
+        self.fire("show_schedule", source=source, show=show,
+            start_time=start_time)
+    
+    def _reschedule_show(self, source_name, show_name):
+        try:
+            source = self.sources[source_name]
+        except KeyError:
+            # that source has been removed
+            return
+        
+        for show in source.shows:
+            if show.name == show_name:
+                key = (source.name, show.name)
+                token = (source, show)
+                
+                self._manager.add_show(key, token, source.driver,
+                    show.schedule)
+                return True
+        
+        return False
     
     def _store_recording(self, source, show, temp_file):
         for driver in source.storage:
