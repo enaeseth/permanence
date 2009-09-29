@@ -30,7 +30,7 @@ class ShowManager(EventSource):
         self._show_access = threading.RLock()
     
     def _get_next_time(self, schedule):
-        return schedule.get_next_time() or None, None
+        return schedule.get_next_time() or (None, None)
     
     def add_show(self, key, token, source, schedule):
         with self._show_access:
