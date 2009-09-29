@@ -17,10 +17,13 @@ class FilesystemDriver(EventSource):
     
     def save(self, source, show, file_path):
         extension = os.path.splitext(file_path)[1]
-        dest_filename = self.path_creator(source, show) + extension
+        dest_path = self.path_creator(source, show) + extension
+        directory, filename = os.path.split(dest_path)
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
         
-        shutil.copy2(file_path, dest_filename)
-        self.fire("save", source=source, show=show, location=dest_filename)
+        shutil.copy2(file_path, dest_path)
+        self.fire("save", source=source, show=show, location=dest_path)
     
     @classmethod
     def from_config(cls, config):
