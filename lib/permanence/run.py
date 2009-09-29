@@ -14,7 +14,7 @@ import time
 import contextlib
 from Queue import Queue
 
-class ShowManager(object):
+class ShowManager(EventSource):
     class ManagedShow(object):
         def __init__(self, token, source, start_time, duration):
             self.token = token
@@ -25,6 +25,7 @@ class ShowManager(object):
             self.stop_time = None
     
     def __init__(self):
+        super(ShowManager, self).__init__()
         self._shows = {}
         self._show_access = threading.RLock()
     
@@ -38,14 +39,20 @@ class ShowManager(object):
             if key not in self._shows:
                 self._shows[key] = self.ManagedShow(token, source, start_time,
                     duration)
+                self.fire('schedule', key=key, token=token,
+                    start_time=start_time, duration=duration)
                 return True
             
             existing = self._shows[key]
-            identical = (existing.start_time == start_time and
-                existing.duration == duration and
-                existing.source == source)
+            same_time = (existing.duration == duration and
+                existing.start_time == start_time)
+            identical = (existing.source == source and same_time)
             if identical:
                 return False
+            
+            if not same_time:
+                self.fire('schedule', key=key, token=token,
+                    start_time=start_time, duration=duration)
             
             existing.token = token
             existing.source = source
