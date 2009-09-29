@@ -131,7 +131,7 @@ class ShowManager(EventSource):
 
 class Recorder(EventSource):
     HOOKS = ("startup", "shutdown", "show_start", "show_error", "show_done",
-        "show_save")
+        "show_schedule", "show_save")
     
     def __init__(self, config):
         super(Recorder, self).__init__()
