@@ -62,7 +62,13 @@ class ProcessMonitor(EventSource):
                     
                     process.poll()
                     if process.returncode is not None:
-                        callback(process.returncode)
+                        try:
+                            callback(process.returncode)
+                        except Exception:
+                            # this thread is doomed. ensure it rises again.
+                            self._thread = None
+                            self.start()
+                            raise
                         if process is first_seen:
                             first_seen = None
                     else:
