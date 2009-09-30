@@ -29,12 +29,12 @@ class ShowManager(EventSource):
         self._shows = {}
         self._show_access = threading.RLock()
     
-    def _get_next_time(self, schedule):
-        return schedule.get_next_time() or (None, None)
+    def _get_next_time(self, schedule, leeway):
+        return schedule.get_next_time(leeway) or (None, None)
     
-    def add_show(self, key, token, source, schedule):
+    def add_show(self, key, token, source, schedule, leeway):
         with self._show_access:
-            start_time, duration = self._get_next_time(schedule)
+            start_time, duration = self._get_next_time(schedule, leeway)
             
             if key not in self._shows:
                 self._shows[key] = self.ManagedShow(token, source, start_time,
@@ -274,7 +274,7 @@ class Recorder(EventSource):
                 token = (source, show)
                 
                 changed = self._manager.add_show(key, token, source.driver,
-                    show.schedule)
+                    show.schedule, self.options.get('leeway', 0))
                 if changed:
                     event = ('show_update' if key in existing_keys
                         else 'show_add')
@@ -317,7 +317,7 @@ class Recorder(EventSource):
                 token = (source, show)
                 
                 self._manager.add_show(key, token, source.driver,
-                    show.schedule)
+                    show.schedule, self.options.get('leeway', 0))
                 return True
         
         return False

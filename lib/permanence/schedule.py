@@ -23,14 +23,17 @@ class WeeklySchedule(object):
         self.start_time = start_time
         self.duration = duration
     
-    def get_next_time(self):
+    def get_next_time(self, leeway):
         now = time.localtime()
+        
+        start_time = self.start_time - leeway
+        duration = self.duration + (leeway * 2)
         
         future = list(now)
         time_of_day = future[5] + (60 * future[4]) + (60 * 60 * future[3])
         weekday = now.tm_wday
         closest = self._get_closest_day_difference(weekday)
-        if closest == 0 and time_of_day >= self.start_time + self.duration:
+        if closest == 0 and time_of_day >= (start_time + duration):
             # the time today has already passed; move to the next occurring day
             weekday += 1
             closest = self._get_closest_day_difference(weekday) + 1
@@ -38,8 +41,8 @@ class WeeklySchedule(object):
         future[3] = future[4] = future[5] = 0 # set time of day to midnight
         start = time.mktime(future) + (60 * 60 * 24) * closest
         
-        start_time = start + self.start_time
-        return (start_time, self.duration)
+        start_time += start
+        return (start_time, duration)
     
     def _get_closest_day_difference(self, today):
         return min((day - today) % 7 for day in self.weekdays)
