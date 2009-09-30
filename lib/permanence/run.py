@@ -247,11 +247,12 @@ class Recorder(EventSource):
             
             source, show = token
             session = driver.spawn(key[1])
-            if session.can_stop_automatically(duration):
+            can_stop = session.can_stop_automatically(duration)
+            if can_stop:
                 stop_time += 3
             
             self._observe_session_events(source, show, session)
-            session.start()
+            session.start(duration if can_stop else None)
             self._manager.set_session(key, session, stop_time)
             
         for key, token, session in self._manager.get_sessions_to_stop():
