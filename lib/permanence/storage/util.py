@@ -62,8 +62,8 @@ class ActionQueue(object):
 def compile_path_pattern(pattern):
     def path_formatter(fn):
         def path_format(source, show):
-            return re.sub(r'\W+', '', re.sub(r'\s+', '_',
-                fn(source, show))).lower()
+            return re.sub(r'__+', '_', re.sub(r'\W+', '', re.sub(r'\s+', '_',
+                fn(source, show)))).lower()
         return path_format
     
     def get_segments():
